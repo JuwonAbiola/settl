@@ -21,30 +21,12 @@ class ContactListScreen extends StatefulWidget {
 }
 
 class _ContactListScreenState extends State<ContactListScreen> {
-  TabController _tabController;
-
   int tabIndex = 0;
-  List<ContactModel> _contacts;
   bool _permissionDenied = false;
 
   @override
   void initState() {
     super.initState();
-    _fetchContacts();
-  }
-
-  Future _fetchContacts() async {
-    if (await FlutterContacts.requestPermission()) {
-      List<Contact> contacts = await FlutterContacts.getContacts(
-          withProperties: true, withPhoto: true);
-      List<ContactModel> contactModelList = contacts
-          .map(
-            (dynamic item) => ContactModel.fromContact(item),
-          )
-          .toList();
-
-      setState(() => _contacts = contactModelList);
-    }
   }
 
   @override
@@ -131,9 +113,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
                   child: TabBarView(
                     physics: NeverScrollableScrollPhysics(),
                     children: [
-                      SingleChildScrollView(
-                          child: _fromContacts(
-                              context: context, contacts: _contacts)),
+                      SingleChildScrollView(child: ContactList()),
                       SingleChildScrollView(
                           child: _phoneNumber(context: context))
                     ],
@@ -186,55 +166,107 @@ Widget _phoneNumber({context}) {
   );
 }
 
-Widget _fromContacts({context, contacts}) {
-  final _formKey = GlobalKey<FormState>();
+class ContactList extends StatefulWidget {
+  ContactList({Key key}) : super(key: key);
 
-  return Form(
-    key: _formKey,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        spacerH20,
-        spacerH5,
-        Input(
+  @override
+  _ContactListState createState() => _ContactListState();
+}
+
+class _ContactListState extends State<ContactList> {
+  TextEditingController searchController = TextEditingController();
+
+  List<ContactModel> _contacts;
+  List<ContactModel> _contactList;
+  bool _permissionDenied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchContacts();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          spacerH20,
+          spacerH5,
+          Input(
             prefix: Icon(Icons.search),
             hintText: 'Search ',
             keyboard: KeyboardType.TEXT,
-            borderColor: ivory),
-        spacerH20,
-        spacerH5,
-        ListView.separated(
-          shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          itemCount: contactMockDataList.length,
-          separatorBuilder: (BuildContext context, int index) => Divider(
-            color: deepMagnolia,
-            thickness: 1,
+            borderColor: ivory,
+            onChanged: (value) {
+              searchResults(value);
+            },
           ),
-          itemBuilder: (BuildContext context, int index) {
-            return ContactTile(
-              data: contactMockDataList[index],
-            );
-          },
-        ),
-        Divider(
-          color: deepMagnolia,
-          thickness: 1,
-        ),
-        contacts == null
-            ? Center(child: CircularProgressIndicator())
-            : ListView.separated(
-                physics: NeverScrollableScrollPhysics(),
-                shrinkWrap: true,
-                separatorBuilder: (BuildContext context, int index) => Divider(
-                      color: deepMagnolia,
-                      thickness: 1,
-                    ),
-                itemCount: contacts?.length,
-                itemBuilder: (context, index) => ContactTile(
-                      data: contacts[index],
-                    ))
-      ],
-    ),
-  );
+          spacerH20,
+          spacerH5,
+          _contacts == null
+              ? Center(child: CircularProgressIndicator())
+              : ListView.separated(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  itemCount: _contacts.length,
+                  separatorBuilder: (BuildContext context, int index) =>
+                      Divider(
+                    color: deepMagnolia,
+                    thickness: 1,
+                  ),
+                  itemBuilder: (BuildContext context, int index) {
+                    return ContactTile(
+                      data: _contacts[index],
+                    );
+                  },
+                ),
+        ],
+      ),
+    );
+  }
+
+  Future _fetchContacts() async {
+    if (await FlutterContacts.requestPermission()) {
+      List<Contact> contacts = await FlutterContacts.getContacts(
+          withProperties: true, withPhoto: true);
+      List<ContactModel> contactModelList = contacts
+          .map(
+            (dynamic item) => ContactModel.fromContact(item),
+          )
+          .toList();
+
+      List<ContactModel> contactList = [
+        ...contactMockDataList,
+        ...contactModelList
+      ];
+
+      setState(() {
+        _contactList = contactList;
+        _contacts = contactList;
+      });
+    }
+  }
+
+  searchResults(String query) {
+    List<ContactModel> searchList = [];
+    searchList.addAll(_contactList);
+    if (query.isNotEmpty) {
+      List<ContactModel> searchResult = [];
+      searchList.forEach((item) {
+        if (item.name.toLowerCase().contains(query.toLowerCase())) {
+          searchResult.add(item);
+        }
+      });
+      setState(() {
+        _contacts = searchResult;
+      });
+      return;
+    } else {
+      setState(() {
+        _contacts = _contactList;
+      });
+    }
+  }
 }
