@@ -3,11 +3,13 @@ import 'package:flutter_contacts/contact.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:settle/common/helpers/colors.dart';
 import 'package:settle/common/helpers/constants.dart';
+import 'package:settle/common/helpers/search_bar.dart';
 import 'package:settle/common/helpers/spacer.dart';
 import 'package:settle/common/helpers/styles.dart';
 import 'package:settle/common/helpers/validators.dart';
 import 'package:settle/common/mock/contactMock.dart';
 import 'package:settle/common/models/contactModels.dart';
+import 'package:settle/common/models/countryModel.dart';
 import 'package:settle/common/widgets/Input.dart';
 import 'package:settle/common/widgets/appBar.dart';
 import 'package:settle/common/widgets/buttons.dart';
@@ -21,30 +23,12 @@ class ContactListScreen extends StatefulWidget {
 }
 
 class _ContactListScreenState extends State<ContactListScreen> {
-  TabController _tabController;
-
   int tabIndex = 0;
-  List<ContactModel> _contacts;
   bool _permissionDenied = false;
 
   @override
   void initState() {
     super.initState();
-    _fetchContacts();
-  }
-
-  Future _fetchContacts() async {
-    if (await FlutterContacts.requestPermission()) {
-      List<Contact> contacts = await FlutterContacts.getContacts(
-          withProperties: true, withPhoto: true);
-      List<ContactModel> contactModelList = contacts
-          .map(
-            (dynamic item) => ContactModel.fromContact(item),
-          )
-          .toList();
-
-      setState(() => _contacts = contactModelList);
-    }
   }
 
   @override
@@ -131,11 +115,8 @@ class _ContactListScreenState extends State<ContactListScreen> {
                   child: TabBarView(
                     physics: NeverScrollableScrollPhysics(),
                     children: [
-                      SingleChildScrollView(
-                          child: _fromContacts(
-                              context: context, contacts: _contacts)),
-                      SingleChildScrollView(
-                          child: _phoneNumber(context: context))
+                      SingleChildScrollView(child: ContactList()),
+                      SingleChildScrollView(child: PhoneNumber())
                     ],
                   ),
                 ),
@@ -146,95 +127,197 @@ class _ContactListScreenState extends State<ContactListScreen> {
   }
 }
 
-Widget _phoneNumber({context}) {
-  final _formKey = GlobalKey<FormState>();
+class ContactList extends StatefulWidget {
+  ContactList({Key key}) : super(key: key);
 
-  return Form(
-    key: _formKey,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        spacerH20,
-        spacerH5,
-        Input(
-            hintText: 'Recepient’s phone number',
-            keyboard: KeyboardType.PHONE,
-            validator: (String value) => FieldValidator.validate(value: value),
-            fillColor: magnolia,
-            borderColor: deepMagnolia),
-        spacerH20,
-        spacerH5,
-        Input(
-            hintText: 'Recepient’s name',
-            keyboard: KeyboardType.TEXT,
-            validator: (String value) => FieldValidator.validate(value: value),
-            fillColor: magnolia,
-            borderColor: deepMagnolia),
-        spacerH50,
-        CustomButton(
-          text: 'Continue',
-          color: primaryColor,
-          onTap: () {
-            FocusScope.of(context).unfocus();
-            if (_formKey.currentState.validate()) {
-              _formKey.currentState.save();
-            }
-          },
-        )
-      ],
-    ),
-  );
+  @override
+  _ContactListState createState() => _ContactListState();
 }
 
-Widget _fromContacts({context, contacts}) {
-  final _formKey = GlobalKey<FormState>();
+class _ContactListState extends State<ContactList> {
+  TextEditingController searchController = TextEditingController();
 
-  return Form(
-    key: _formKey,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        spacerH20,
-        spacerH5,
-        Input(
+  List<ContactModel> _contacts;
+  List<ContactModel> _contactList;
+  bool _permissionDenied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchContacts();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          spacerH20,
+          spacerH5,
+          Input(
             prefix: Icon(Icons.search),
             hintText: 'Search ',
             keyboard: KeyboardType.TEXT,
-            borderColor: ivory),
-        spacerH20,
-        spacerH5,
-        ListView.separated(
-          shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          itemCount: contactMockDataList.length,
-          separatorBuilder: (BuildContext context, int index) => Divider(
-            color: deepMagnolia,
-            thickness: 1,
+            borderColor: ivory,
+            onChanged: (value) {
+              searchResults(value);
+            },
           ),
-          itemBuilder: (BuildContext context, int index) {
-            return ContactTile(
-              data: contactMockDataList[index],
-            );
-          },
-        ),
-        Divider(
-          color: deepMagnolia,
-          thickness: 1,
-        ),
-        contacts == null
-            ? Center(child: CircularProgressIndicator())
-            : ListView.separated(
-                physics: NeverScrollableScrollPhysics(),
-                shrinkWrap: true,
-                separatorBuilder: (BuildContext context, int index) => Divider(
-                      color: deepMagnolia,
-                      thickness: 1,
-                    ),
-                itemCount: contacts?.length,
-                itemBuilder: (context, index) => ContactTile(
-                      data: contacts[index],
-                    ))
-      ],
-    ),
-  );
+          spacerH20,
+          spacerH5,
+          _contacts == null
+              ? Center(child: CircularProgressIndicator())
+              : ListView.separated(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  itemCount: _contacts.length,
+                  separatorBuilder: (BuildContext context, int index) =>
+                      Divider(
+                    color: deepMagnolia,
+                    thickness: 1,
+                  ),
+                  itemBuilder: (BuildContext context, int index) {
+                    return ContactTile(
+                      data: _contacts[index],
+                    );
+                  },
+                ),
+        ],
+      ),
+    );
+  }
+
+  Future _fetchContacts() async {
+    if (await FlutterContacts.requestPermission()) {
+      List<Contact> contacts = await FlutterContacts.getContacts(
+          withProperties: true, withPhoto: true);
+      List<ContactModel> contactModelList = contacts
+          .map(
+            (dynamic item) => ContactModel.fromContact(item),
+          )
+          .toList();
+
+      List<ContactModel> contactList = [
+        ...contactMockDataList,
+        ...contactModelList
+      ];
+
+      setState(() {
+        _contactList = contactList;
+        _contacts = contactList;
+      });
+    }
+  }
+
+  searchResults(String query) {
+    List<ContactModel> searchList = [];
+    searchList.addAll(_contactList);
+    if (query.isNotEmpty) {
+      List<ContactModel> searchResult = [];
+      searchList.forEach((item) {
+        if (item.name.toLowerCase().contains(query.toLowerCase())) {
+          searchResult.add(item);
+        }
+      });
+      setState(() {
+        _contacts = searchResult;
+      });
+      return;
+    } else {
+      setState(() {
+        _contacts = _contactList;
+      });
+    }
+  }
+}
+
+class PhoneNumber extends StatefulWidget {
+  PhoneNumber({Key key}) : super(key: key);
+
+  @override
+  _PhoneNumberState createState() => _PhoneNumberState();
+}
+
+class _PhoneNumberState extends State<PhoneNumber> {
+  final _formKey = GlobalKey<FormState>();
+  CountryModel countryModel =
+      countryList.firstWhere((x) => x.countryCallingCode == '+234');
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          spacerH20,
+          spacerH5,
+          Input(
+              prefix: GestureDetector(
+                  onTap: () async {
+                    CountryModel data =
+                        await countrySearchWidget(context: context);
+                    if (data != null) {
+                      setState(() {
+                        countryModel = data;
+                      });
+                    }
+                  },
+                  child: RichText(
+                      text: TextSpan(
+                    children: [
+                      WidgetSpan(
+                          child: Padding(
+                        padding: EdgeInsets.only(top: 10, left: 10, right: 5),
+                        child: Text(
+                          '${countryModel?.countryCallingCode} ${countryModel?.flag}',
+                          style: TextStyle(
+                            color: black,
+                          ),
+                        ),
+                      )),
+                      WidgetSpan(
+                          child: Padding(
+                        padding: const EdgeInsets.only(top: 8, right: 5),
+                        child: SizedBox(
+                          height: 20,
+                          child: VerticalDivider(
+                            color: nobleGrey,
+                            width: 5,
+                          ),
+                        ),
+                      ))
+                    ],
+                  ))),
+              hintText: 'Phone number',
+              keyboard: KeyboardType.PHONE,
+              validator: (String value) =>
+                  FieldValidator.validate(value: value),
+              fillColor: magnolia,
+              borderColor: deepMagnolia),
+          spacerH20,
+          spacerH5,
+          Input(
+              hintText: 'Name',
+              keyboard: KeyboardType.TEXT,
+              validator: (String value) =>
+                  FieldValidator.validate(value: value),
+              fillColor: magnolia,
+              borderColor: deepMagnolia),
+          spacerH50,
+          CustomButton(
+            text: 'Continue',
+            color: primaryColor,
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              if (_formKey.currentState.validate()) {
+                _formKey.currentState.save();
+              }
+            },
+          )
+        ],
+      ),
+    );
+  }
 }
