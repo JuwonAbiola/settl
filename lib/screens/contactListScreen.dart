@@ -3,11 +3,13 @@ import 'package:flutter_contacts/contact.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:settle/common/helpers/colors.dart';
 import 'package:settle/common/helpers/constants.dart';
+import 'package:settle/common/helpers/search_bar.dart';
 import 'package:settle/common/helpers/spacer.dart';
 import 'package:settle/common/helpers/styles.dart';
 import 'package:settle/common/helpers/validators.dart';
 import 'package:settle/common/mock/contactMock.dart';
 import 'package:settle/common/models/contactModels.dart';
+import 'package:settle/common/models/countryModel.dart';
 import 'package:settle/common/widgets/Input.dart';
 import 'package:settle/common/widgets/appBar.dart';
 import 'package:settle/common/widgets/buttons.dart';
@@ -114,8 +116,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
                     physics: NeverScrollableScrollPhysics(),
                     children: [
                       SingleChildScrollView(child: ContactList()),
-                      SingleChildScrollView(
-                          child: _phoneNumber(context: context))
+                      SingleChildScrollView(child: PhoneNumber())
                     ],
                   ),
                 ),
@@ -124,46 +125,6 @@ class _ContactListScreenState extends State<ContactListScreen> {
           ),
         ));
   }
-}
-
-Widget _phoneNumber({context}) {
-  final _formKey = GlobalKey<FormState>();
-
-  return Form(
-    key: _formKey,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        spacerH20,
-        spacerH5,
-        Input(
-            hintText: 'Recepient’s phone number',
-            keyboard: KeyboardType.PHONE,
-            validator: (String value) => FieldValidator.validate(value: value),
-            fillColor: magnolia,
-            borderColor: deepMagnolia),
-        spacerH20,
-        spacerH5,
-        Input(
-            hintText: 'Recepient’s name',
-            keyboard: KeyboardType.TEXT,
-            validator: (String value) => FieldValidator.validate(value: value),
-            fillColor: magnolia,
-            borderColor: deepMagnolia),
-        spacerH50,
-        CustomButton(
-          text: 'Continue',
-          color: primaryColor,
-          onTap: () {
-            FocusScope.of(context).unfocus();
-            if (_formKey.currentState.validate()) {
-              _formKey.currentState.save();
-            }
-          },
-        )
-      ],
-    ),
-  );
 }
 
 class ContactList extends StatefulWidget {
@@ -268,5 +229,95 @@ class _ContactListState extends State<ContactList> {
         _contacts = _contactList;
       });
     }
+  }
+}
+
+class PhoneNumber extends StatefulWidget {
+  PhoneNumber({Key key}) : super(key: key);
+
+  @override
+  _PhoneNumberState createState() => _PhoneNumberState();
+}
+
+class _PhoneNumberState extends State<PhoneNumber> {
+  final _formKey = GlobalKey<FormState>();
+  CountryModel countryModel =
+      countryList.firstWhere((x) => x.countryCallingCode == '+234');
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          spacerH20,
+          spacerH5,
+          Input(
+              prefix: GestureDetector(
+                  onTap: () async {
+                    CountryModel data =
+                        await countrySearchWidget(context: context);
+                    if (data != null) {
+                      setState(() {
+                        countryModel = data;
+                      });
+                    }
+                  },
+                  child: RichText(
+                      text: TextSpan(
+                    children: [
+                      WidgetSpan(
+                          child: Padding(
+                        padding: EdgeInsets.only(top: 10, left: 10, right: 5),
+                        child: Text(
+                          '${countryModel?.countryCallingCode} ${countryModel?.flag}',
+                          style: TextStyle(
+                            color: black,
+                          ),
+                        ),
+                      )),
+                      WidgetSpan(
+                          child: Padding(
+                        padding: const EdgeInsets.only(top: 8, right: 5),
+                        child: SizedBox(
+                          height: 20,
+                          child: VerticalDivider(
+                            color: nobleGrey,
+                            width: 5,
+                          ),
+                        ),
+                      ))
+                    ],
+                  ))),
+              hintText: 'Phone number',
+              keyboard: KeyboardType.PHONE,
+              validator: (String value) =>
+                  FieldValidator.validate(value: value),
+              fillColor: magnolia,
+              borderColor: deepMagnolia),
+          spacerH20,
+          spacerH5,
+          Input(
+              hintText: 'Name',
+              keyboard: KeyboardType.TEXT,
+              validator: (String value) =>
+                  FieldValidator.validate(value: value),
+              fillColor: magnolia,
+              borderColor: deepMagnolia),
+          spacerH50,
+          CustomButton(
+            text: 'Continue',
+            color: primaryColor,
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              if (_formKey.currentState.validate()) {
+                _formKey.currentState.save();
+              }
+            },
+          )
+        ],
+      ),
+    );
   }
 }
